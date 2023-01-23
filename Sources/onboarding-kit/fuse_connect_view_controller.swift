@@ -17,7 +17,7 @@ public struct Exit {
 }
 
 @available(iOS 13.0.0, *)
-public class WebViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
+public class FuseConnectViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
     static let webViewURL = "https://shoreditch-indol.vercel.app"
 //    static let webViewURL = "http://10.38.63.212:3000"
 
@@ -57,7 +57,7 @@ public class WebViewController: UIViewController, WKNavigationDelegate, WKScript
         webView.backgroundColor = .white
         view.addSubview(webView)
 
-        var urlComponents = URLComponents(string: "\(WebViewController.webViewURL)/intro")!
+        var urlComponents = URLComponents(string: "\(FuseConnectViewController.webViewURL)/intro")!
         urlComponents.queryItems = [URLQueryItem(name: "client_secret", value: clientSecret), URLQueryItem(name: "webview", value: "true")]
         let url = urlComponents.url!
         let request = URLRequest(url: url)
@@ -102,7 +102,7 @@ public class WebViewController: UIViewController, WKNavigationDelegate, WKScript
                     onInstitutionSelected(InstitutionSelect(institution_id: institutionId, callback: { link_token in
                         print("Received call back \(link_token)")
 
-                        var urlComponents = URLComponents(string: "\(WebViewController.webViewURL)/bank-link")!
+                        var urlComponents = URLComponents(string: "\(FuseConnectViewController.webViewURL)/bank-link")!
                         urlComponents.queryItems = [URLQueryItem(name: "link_token", value: link_token)]
                         let url = urlComponents.url!
                         let request = URLRequest(url: url)
