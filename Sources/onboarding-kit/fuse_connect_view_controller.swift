@@ -121,7 +121,11 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     let linkToken = plaidLinkToken
                     openPlaid(token: linkToken)
                 case "ON_EXIT":
-                    onExit(Exit(err: nil, metadata: nil))
+                    if let errorCode = url.queryParameters["error"] {
+                        onExit(Exit(err: ConnectError(errorCode: errorCode, errorType: url.queryParameters["error_type"], errorMessage: url.queryParameters["error_message"]), metadata: [:]))
+                    } else {
+                        onExit(Exit(err: nil, metadata: nil))
+                    }
                 default:
                     break
                 }
@@ -176,9 +180,6 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                 @unknown default:
                     self.onExit(Exit(err: ConnectError(errorCode: "UNKNOWN", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
                 }
-                // Optionally handle linkExit data according to your application's needs
-            } else {
-                self.onExit(Exit(err: nil, metadata: [:]))
             }
         }
 
