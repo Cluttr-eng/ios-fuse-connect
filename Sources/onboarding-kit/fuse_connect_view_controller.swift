@@ -25,8 +25,8 @@ public struct ConnectError {
 
 @available(iOS 13.0.0, *)
 public class FuseConnectViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
-//    static let webViewURL = "https://shoreditch-indol.vercel.app"
-    static let webViewURL = "http://192.168.1.151:3002"
+    static let webViewURL = "https://shoreditch-indol.vercel.app"
+//    static let webViewURL = "http://192.168.1.151:3002"
 
     let clientSecret: String
     let onSuccess: (LinkSuccess) -> Void
@@ -38,6 +38,8 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
     var webView: WKWebView!
 
     var activityIndicator: UIActivityIndicatorView!
+
+    var lastConnectError: ConnectError?
 
     public init(clientSecret: String, onEvent: @escaping (String, [String: String]) -> Void, onSuccess: @escaping (LinkSuccess) -> Void, onInstitutionSelected: @escaping (InstitutionSelect) -> Void, onExit: @escaping (Exit) -> Void) {
         self.clientSecret = clientSecret
@@ -121,7 +123,9 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     let linkToken = plaidLinkToken
                     openPlaid(token: linkToken)
                 case "ON_EXIT":
-                    if let errorCode = url.queryParameters["error"] {
+                    if lastConnectError != nil {
+                        onExit(Exit(err: lastConnectError, metadata: nil))
+                    } else if let errorCode = url.queryParameters["error"] {
                         onExit(Exit(err: ConnectError(errorCode: errorCode, errorType: url.queryParameters["error_type"], errorMessage: url.queryParameters["error_message"]), metadata: [:]))
                     } else {
                         onExit(Exit(err: nil, metadata: nil))
@@ -155,30 +159,32 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
         )
 
         configuration.onExit = { linkExit in
+            print("Plaid On exit")
+
             if let error = linkExit.error {
+                print(error.errorCode)
                 switch error.errorCode {
-                case .apiError:
-                    self.onExit(Exit(err: ConnectError(errorCode: "API_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .authError:
-                    self.onExit(Exit(err: ConnectError(errorCode: "AUTH_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .assetReportError:
-                    self.onExit(Exit(err: ConnectError(errorCode: "ASSET_REPORT_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .internal:
-                    self.onExit(Exit(err: ConnectError(errorCode: "INTERNAL", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .institutionError:
-                    self.onExit(Exit(err: ConnectError(errorCode: "INSTITUTION_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .itemError:
-                    self.onExit(Exit(err: ConnectError(errorCode: "ITEM_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .invalidInput:
-                    self.onExit(Exit(err: ConnectError(errorCode: "INVALID_INPUT", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .invalidRequest:
-                    self.onExit(Exit(err: ConnectError(errorCode: "INVALID_REQUEST", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .rateLimitExceeded:
-                    self.onExit(Exit(err: ConnectError(errorCode: "RATE_LIMIT_EXCEEDED", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                case .unknown:
-                    self.onExit(Exit(err: ConnectError(errorCode: "UNKNOWN", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
-                @unknown default:
-                    self.onExit(Exit(err: ConnectError(errorCode: "UNKNOWN", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .apiError(let apiErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: apiErrorCode.description, errorType: "API_ERROR", errorMessage: error.errorMessage)
+                case .authError(let authErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: authErrorCode.description, errorType: "AUTH_ERROR", errorMessage: error.errorMessage)
+                case .assetReportError(let assetReportErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: assetReportErrorCode.description, errorType: "ASSET_REPORT_ERROR", errorMessage: error.errorMessage)
+                case .internal(let message):
+                    self.lastConnectError = ConnectError(errorCode: "", errorType: "INTERNAL", errorMessage: message)
+                case .institutionError(let institutionErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: institutionErrorCode.description, errorType: "INSTITUTION_ERROR", errorMessage: error.errorMessage)
+                case .itemError(let itemErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: itemErrorCode.description, errorType: "ITEM_ERROR", errorMessage: error.errorMessage)
+                case .invalidInput(let invalidInputErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: invalidInputErrorCode.description, errorType: "INVALID_INPUT", errorMessage: error.errorMessage)
+                case .invalidRequest(let invalidRequestErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: invalidRequestErrorCode.description, errorType: "INVALID_REQUEST", errorMessage: error.errorMessage)
+                case .rateLimitExceeded(let rateLimitErrorCode):
+                    self.lastConnectError = ConnectError(errorCode: rateLimitErrorCode.description, errorType: "RATE_LIMIT_EXCEEDED", errorMessage: error.errorMessage)
+                case .unknown(let type, let code):
+                    self.lastConnectError = ConnectError(errorCode: code, errorType: type, errorMessage: error.errorMessage)
+                @unknown default: break
                 }
             }
         }
