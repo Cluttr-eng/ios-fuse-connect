@@ -12,14 +12,21 @@ public struct InstitutionSelect {
 }
 
 public struct Exit {
-    public var err: Error?
+    public var err: ConnectError?
     public var metadata: [String: Any]?
+}
+
+public struct ConnectError {
+    public var errorCode: String?
+    public var errorType: String?
+    public var displayMessage: String?
+    public var errorMessage: String?
 }
 
 @available(iOS 13.0.0, *)
 public class FuseConnectViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
-    static let webViewURL = "https://shoreditch-indol.vercel.app"
-//    static let webViewURL = "http://10.38.63.212:3000"
+//    static let webViewURL = "https://shoreditch-indol.vercel.app"
+    static let webViewURL = "http://192.168.1.151:3002"
 
     let clientSecret: String
     let onSuccess: (LinkSuccess) -> Void
@@ -134,7 +141,7 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
     }
 
     public func openPlaid(token: String) {
-        let configuration = LinkTokenConfiguration(
+        var configuration = LinkTokenConfiguration(
             token: token,
             onSuccess: { linkSuccess in
                 print("plaid onSuccess")
@@ -142,6 +149,38 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                 self.onSuccess(LinkSuccess(public_token: fusePublicToken))
             }
         )
+
+        configuration.onExit = { linkExit in
+            if let error = linkExit.error {
+                switch error.errorCode {
+                case .apiError:
+                    self.onExit(Exit(err: ConnectError(errorCode: "API_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .authError:
+                    self.onExit(Exit(err: ConnectError(errorCode: "AUTH_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .assetReportError:
+                    self.onExit(Exit(err: ConnectError(errorCode: "ASSET_REPORT_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .internal:
+                    self.onExit(Exit(err: ConnectError(errorCode: "INTERNAL", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .institutionError:
+                    self.onExit(Exit(err: ConnectError(errorCode: "INSTITUTION_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .itemError:
+                    self.onExit(Exit(err: ConnectError(errorCode: "ITEM_ERROR", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .invalidInput:
+                    self.onExit(Exit(err: ConnectError(errorCode: "INVALID_INPUT", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .invalidRequest:
+                    self.onExit(Exit(err: ConnectError(errorCode: "INVALID_REQUEST", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .rateLimitExceeded:
+                    self.onExit(Exit(err: ConnectError(errorCode: "RATE_LIMIT_EXCEEDED", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                case .unknown:
+                    self.onExit(Exit(err: ConnectError(errorCode: "UNKNOWN", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                @unknown default:
+                    self.onExit(Exit(err: ConnectError(errorCode: "UNKNOWN", errorType: "", errorMessage: error.errorMessage), metadata: [:]))
+                }
+                // Optionally handle linkExit data according to your application's needs
+            } else {
+                self.onExit(Exit(err: nil, metadata: [:]))
+            }
+        }
 
         let result = Plaid.create(configuration)
 
