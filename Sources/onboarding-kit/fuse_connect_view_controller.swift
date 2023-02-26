@@ -25,8 +25,7 @@ public struct ConnectError {
 
 @available(iOS 13.0.0, *)
 public class FuseConnectViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
-    static let webViewURL = "https://shoreditch-indol.vercel.app"
-//    static let webViewURL = "http://192.168.1.151:3002"
+    static let webViewURL = "https://connect.letsfuse.com"
 
     let clientSecret: String
     let onSuccess: (LinkSuccess) -> Void
