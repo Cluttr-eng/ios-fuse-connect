@@ -55,6 +55,7 @@ public class SnaptradeViewController: UIViewController, WKNavigationDelegate, WK
     }
 
     public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        
+        if let url = navigationAction.request.url, url.scheme == "fuse" {}
+        return WKNavigationActionPolicy.allow
     }
 }
