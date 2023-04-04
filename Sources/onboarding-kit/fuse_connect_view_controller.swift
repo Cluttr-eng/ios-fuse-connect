@@ -21,12 +21,12 @@ public struct ConnectError {
     public var errorType: String?
     public var displayMessage: String?
     public var errorMessage: String?
+    public var metadata: [String: Any]?
 }
 
 @available(iOS 13.0.0, *)
 public class FuseConnectViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
-    static let webViewURL = "https://connect.letsfuse.com"
-
+    var webViewURL = "https://connect.letsfuse.com"
     let clientSecret: String
     let onSuccess: (LinkSuccess) -> Void
     let onInstitutionSelected: (InstitutionSelect) -> Void
@@ -40,12 +40,17 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
 
     var lastConnectError: ConnectError?
 
-    public init(clientSecret: String, onEvent: @escaping (String, [String: String]) -> Void, onSuccess: @escaping (LinkSuccess) -> Void, onInstitutionSelected: @escaping (InstitutionSelect) -> Void, onExit: @escaping (Exit) -> Void) {
+    public init(clientSecret: String, overrideBaseUrl: String? = nil, onEvent: @escaping (String, [String: String]) -> Void, onSuccess: @escaping (LinkSuccess) -> Void, onInstitutionSelected: @escaping (InstitutionSelect) -> Void, onExit: @escaping (Exit) -> Void) {
         self.clientSecret = clientSecret
         self.onEvent = onEvent
         self.onSuccess = onSuccess
         self.onInstitutionSelected = onInstitutionSelected
         self.onExit = onExit
+
+        if let overrideBaseUrl = overrideBaseUrl {
+            self.webViewURL = overrideBaseUrl
+        }
+
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -65,7 +70,7 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
         webView.backgroundColor = .white
         view.addSubview(webView)
 
-        var urlComponents = URLComponents(string: "\(FuseConnectViewController.webViewURL)/intro")!
+        var urlComponents = URLComponents(string: "\(webViewURL)/intro")!
         urlComponents.queryItems = [URLQueryItem(name: "client_secret", value: clientSecret), URLQueryItem(name: "webview", value: "true")]
         let url = urlComponents.url!
         let request = URLRequest(url: url)
@@ -110,7 +115,7 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     onInstitutionSelected(InstitutionSelect(institution_id: institutionId, callback: { link_token in
                         print("Received call back \(link_token)")
 
-                        var urlComponents = URLComponents(string: "\(FuseConnectViewController.webViewURL)/bank-link")!
+                        var urlComponents = URLComponents(string: "\(self.webViewURL)/bank-link")!
                         urlComponents.queryItems = [URLQueryItem(name: "link_token", value: link_token)]
                         let url = urlComponents.url!
                         let request = URLRequest(url: url)
@@ -129,6 +134,13 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     } else {
                         onExit(Exit(err: nil, metadata: nil))
                     }
+                case "OPEN_SNAPTRADE":
+                    let redirectUri = url.queryParameters["redirect_uri"]!
+                    let viewController = SnaptradeViewController(redirectUri: redirectUri) { onSuccess in
+                        let fusePublicToken = self.createPublicTokenFromSnaptrade(authorizationId: onSuccess.authorization_id, sessionClientSecret: self.clientSecret)
+                        self.onSuccess(LinkSuccess(public_token: fusePublicToken))
+                    }
+                    topMostController().present(viewController, animated: true)
                 default:
                     break
                 }
@@ -161,28 +173,30 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
             print("Plaid On exit")
 
             if let error = linkExit.error {
-                print(error.errorCode)
+                var metadata: [String: Any] = [:]
+                metadata["plaid"] = linkExit.metadata.metadataJSON
+
                 switch error.errorCode {
                 case .apiError(let apiErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: apiErrorCode.description, errorType: "API_ERROR", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: apiErrorCode.description, errorType: "API_ERROR", errorMessage: error.errorMessage, metadata: metadata)
                 case .authError(let authErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: authErrorCode.description, errorType: "AUTH_ERROR", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: authErrorCode.description, errorType: "AUTH_ERROR", errorMessage: error.errorMessage, metadata: metadata)
                 case .assetReportError(let assetReportErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: assetReportErrorCode.description, errorType: "ASSET_REPORT_ERROR", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: assetReportErrorCode.description, errorType: "ASSET_REPORT_ERROR", errorMessage: error.errorMessage, metadata: metadata)
                 case .internal(let message):
-                    self.lastConnectError = ConnectError(errorCode: "", errorType: "INTERNAL", errorMessage: message)
+                    self.lastConnectError = ConnectError(errorCode: "", errorType: "INTERNAL", errorMessage: message, metadata: metadata)
                 case .institutionError(let institutionErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: institutionErrorCode.description, errorType: "INSTITUTION_ERROR", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: institutionErrorCode.description, errorType: "INSTITUTION_ERROR", errorMessage: error.errorMessage, metadata: metadata)
                 case .itemError(let itemErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: itemErrorCode.description, errorType: "ITEM_ERROR", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: itemErrorCode.description, errorType: "ITEM_ERROR", errorMessage: error.errorMessage, metadata: metadata)
                 case .invalidInput(let invalidInputErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: invalidInputErrorCode.description, errorType: "INVALID_INPUT", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: invalidInputErrorCode.description, errorType: "INVALID_INPUT", errorMessage: error.errorMessage, metadata: metadata)
                 case .invalidRequest(let invalidRequestErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: invalidRequestErrorCode.description, errorType: "INVALID_REQUEST", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: invalidRequestErrorCode.description, errorType: "INVALID_REQUEST", errorMessage: error.errorMessage, metadata: metadata)
                 case .rateLimitExceeded(let rateLimitErrorCode):
-                    self.lastConnectError = ConnectError(errorCode: rateLimitErrorCode.description, errorType: "RATE_LIMIT_EXCEEDED", errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: rateLimitErrorCode.description, errorType: "RATE_LIMIT_EXCEEDED", errorMessage: error.errorMessage, metadata: metadata)
                 case .unknown(let type, let code):
-                    self.lastConnectError = ConnectError(errorCode: code, errorType: type, errorMessage: error.errorMessage)
+                    self.lastConnectError = ConnectError(errorCode: code, errorType: type, errorMessage: error.errorMessage, metadata: metadata)
                 @unknown default: break
                 }
             }
@@ -206,6 +220,24 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
         let data = [
             "type": "plaid",
             "public_token": publicToken
+        ]
+        let payload = [
+            "session_client_secret": sessionClientSecret,
+            "data": data
+        ] as [String: Any]
+
+        guard let jsonPayload = try? JSONSerialization.data(withJSONObject: payload, options: []) else {
+            return ""
+        }
+
+        let encodedJSON = jsonPayload.base64EncodedString()
+        return encodedJSON
+    }
+
+    func createPublicTokenFromSnaptrade(authorizationId: String, sessionClientSecret: String) -> String {
+        let data = [
+            "type": "snaptrade",
+            "brokerage_authorization_id": authorizationId
         ]
         let payload = [
             "session_client_secret": sessionClientSecret,
