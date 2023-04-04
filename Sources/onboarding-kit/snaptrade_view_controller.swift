@@ -46,12 +46,56 @@ public class SnaptradeViewController: UIViewController, WKNavigationDelegate, WK
 
         view.addSubview(activityIndicator)
         activityIndicator.center = view.center
+
+        let source = "function captureLog(msg) { window.webkit.messageHandlers.logHandler.postMessage(msg); } window.console.log = captureLog;"
+        let script = WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        webView.configuration.userContentController.addUserScript(script)
+
+        let source2 = """
+        window.addEventListener('message', function(e) {
+            window.webkit.messageHandlers.iosListener.postMessage(e.data);
+        });
+        """
+        let script2 = WKUserScript(source: source2, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        webView.configuration.userContentController.addUserScript(script2)
+
+        // register the bridge script that listens for the output
+        webView.configuration.userContentController.add(self, name: "logHandler")
+
+        webView.configuration.userContentController.add(self, name: "iosListener")
     }
 
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "logHandler" {
             print("LOG: \(message.body)")
         }
+
+        if message.name == "iosListener" {
+            print("LOG SNAPTRADE: \(message.body)")
+
+            if let bodyString = message.body as? String, bodyString.contains("SUCCESS") {
+                let components = bodyString.components(separatedBy: ":")
+                if components.count > 1 {
+                    let authorizationId = components[1].trimmingCharacters(in: .whitespaces)
+                    onSuccess(OnSuccess(authorization_id: authorizationId))
+                } else {
+                    print("No authorization id")
+                    onSuccess(OnSuccess(authorization_id: ""))
+                }
+            } else if let bodyString = message.body as? String, bodyString.contains("ABANDONED") {
+                dismiss(animated: false)
+            } else if let bodyString = message.body as? String, bodyString.contains("ERROR") {
+                let components = bodyString.components(separatedBy: ":")
+                if components.count > 1 {
+                } else {}
+            }
+        }
+    }
+
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        print("didFinish")
+        activityIndicator.stopAnimating()
+        activityIndicator.removeFromSuperview()
     }
 
     public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
