@@ -76,6 +76,7 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
         let request = URLRequest(url: url)
 
         webView.load(request)
+        webView.scrollView.isScrollEnabled = false
 
         // Show the loading indicator
         activityIndicator = UIActivityIndicatorView(style: .large)
