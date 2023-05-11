@@ -14,7 +14,7 @@ Pod::Spec.new do |spec|
     spec.platforms = { :ios => "13.0" }
     spec.source       = { :git => "https://github.com/Cluttr-eng/ios-fuse-connect.git", :tag => "#{spec.version}" }
     spec.source_files  = "Sources/onboarding-kit/**/*.swift"
-    spec.dependency 'Plaid', '~> 3.1.1'
+    spec.dependency 'Plaid', '~> 4.3.0'
     spec.swift_version = "5.6.1"
     spec.xcconfig = { "SWIFT_VERSION" => "5.6.1" }
 end
