@@ -6,16 +6,21 @@ public struct OnSuccess {
     public let authorization_id: String
 }
 
+public struct OnExit {
+}
+
 @available(iOS 13.0.0, *)
 public class SnaptradeViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
     let redirectUri: String
     let onSuccess: (OnSuccess) -> Void
+    let onExit: (OnExit) -> Void
     var webView: WKWebView!
     var activityIndicator: UIActivityIndicatorView!
 
-    public init(redirectUri: String, onSuccess: @escaping (OnSuccess) -> Void) {
+    public init(redirectUri: String, onSuccess: @escaping (OnSuccess) -> Void, onExit: @escaping (OnExit) -> Void) {
         self.redirectUri = redirectUri
         self.onSuccess = onSuccess
+        self.onExit = onExit
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -84,6 +89,7 @@ public class SnaptradeViewController: UIViewController, WKNavigationDelegate, WK
                 }
             } else if let bodyString = message.body as? String, bodyString.contains("ABANDONED") {
                 dismiss(animated: false)
+                onExit(OnExit())
             } else if let bodyString = message.body as? String, bodyString.contains("ERROR") {
                 let components = bodyString.components(separatedBy: ":")
                 if components.count > 1 {

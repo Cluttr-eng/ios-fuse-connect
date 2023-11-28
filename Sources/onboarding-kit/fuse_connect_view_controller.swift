@@ -24,6 +24,10 @@ public struct ConnectError {
     public var metadata: [String: Any]?
 }
 
+public struct LinkTokenJson: Decodable {
+    public var fallback_aggregators: [String]?
+}
+
 @available(iOS 13.0.0, *)
 public class FuseConnectViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
     var webViewURL = "https://connect.letsfuse.com"
@@ -39,6 +43,9 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
     var activityIndicator: UIActivityIndicatorView!
 
     var lastConnectError: ConnectError?
+    
+    var lastLinkTokenJson: LinkTokenJson?
+    var lastLinkToken: String?
 
     public init(clientSecret: String, overrideBaseUrl: String? = nil, onEvent: @escaping (String, [String: String]) -> Void, onSuccess: @escaping (LinkSuccess) -> Void, onInstitutionSelected: @escaping (InstitutionSelect) -> Void, onExit: @escaping (Exit) -> Void) {
         self.clientSecret = clientSecret
@@ -116,6 +123,10 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     onInstitutionSelected(InstitutionSelect(institution_id: institutionId, callback: { link_token in
                         print("Received call back \(link_token)")
 
+                        let linkTokenJsonData = Data(base64Encoded: link_token)!
+                        self.lastLinkTokenJson = try? JSONDecoder().decode(LinkTokenJson.self, from: linkTokenJsonData)
+                        self.lastLinkToken = link_token
+                        
                         var urlComponents = URLComponents(string: "\(self.webViewURL)/bank-link")!
                         urlComponents.queryItems = [URLQueryItem(name: "link_token", value: link_token)]
                         let url = urlComponents.url!
@@ -125,8 +136,11 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     }))
                 case "OPEN_PLAID":
                     let plaidLinkToken = url.queryParameters["plaid_link_token"]!
+                    let closeOnExitString = url.queryParameters["close_on_exit"] ?? "false"
+                    let closeOnExit = closeOnExitString.lowercased() == "true"
+
                     let linkToken = plaidLinkToken
-                    openPlaid(token: linkToken)
+                    openPlaid(token: linkToken, closeOnExit: closeOnExit)
                 case "ON_EXIT":
                     if lastConnectError != nil {
                         onExit(Exit(err: lastConnectError, metadata: nil))
@@ -137,10 +151,16 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                     }
                 case "OPEN_SNAPTRADE":
                     let redirectUri = url.queryParameters["redirect_uri"]!
-                    let viewController = SnaptradeViewController(redirectUri: redirectUri) { onSuccess in
+                    let closeOnExitString = url.queryParameters["close_on_exit"] ?? "false"
+                    let closeOnExit = closeOnExitString.lowercased() == "true"
+                    let viewController = SnaptradeViewController(redirectUri: redirectUri, onSuccess: { onSuccess in
                         let fusePublicToken = self.createPublicTokenFromSnaptrade(authorizationId: onSuccess.authorization_id, sessionClientSecret: self.clientSecret)
                         self.onSuccess(LinkSuccess(public_token: fusePublicToken))
-                    }
+                    }, onExit: { onExit in
+                        if (closeOnExit) {
+                            self.onExit(Exit(err: nil, metadata: nil))
+                        }
+                    })
                     topMostController().present(viewController, animated: true)
                 default:
                     break
@@ -160,7 +180,7 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
         activityIndicator.removeFromSuperview()
     }
 
-    public func openPlaid(token: String) {
+    public func openPlaid(token: String, closeOnExit: Bool) {
         var configuration = LinkTokenConfiguration(
             token: token,
             onSuccess: { linkSuccess in
@@ -199,6 +219,42 @@ public class FuseConnectViewController: UIViewController, WKNavigationDelegate, 
                 case .unknown(let type, let code):
                     self.lastConnectError = ConnectError(errorCode: code, errorType: type, errorMessage: error.errorMessage, metadata: metadata)
                 @unknown default: break
+                }
+            }
+            
+            let retryableErrors: [String] = [
+              "INSTITUTION_DOWN",
+              "INSTITUTION_NO_LONGER_SUPPORTED",
+              "INSTITUTION_NOT_AVAILABLE",
+              "INSTITUTION_NOT_ENABLED_IN_ENVIRONMENT",
+              "INSTITUTION_NOT_FOUND",
+              "INSTITUTION_NOT_RESPONDING",
+              "INSTITUTION_REGISTRATION_REQUIRED",
+              "UNAUTHORIZED_INSTITUTION",
+              "INSTITUTION_DOWN",
+              "INTERNAL_SERVER_ERROR",
+              "INVALID_SEND_METHOD",
+              "ITEM_LOCKED",
+              "ITEM_NOT_SUPPORTED",
+              "MFA_NOT_SUPPORTED",
+              "NO_ACCOUNTS",
+              "USER_INPUT_TIMEOUT",
+              "USER_SETUP_REQUIRED",
+            ];
+            
+            if (self.lastConnectError != nil && retryableErrors.contains(self.lastConnectError?.errorCode ?? "") && !(self.lastLinkTokenJson?.fallback_aggregators?.isEmpty ?? true)) {
+                var urlComponents = URLComponents(string: "\(self.webViewURL)/bank-link")!
+                urlComponents.queryItems = [URLQueryItem(name: "link_token", value: self.lastLinkToken), URLQueryItem(name: "is_fall_back", value: "true")]
+                let url = urlComponents.url!
+                let request = URLRequest(url: url)
+                self.webView.load(request)
+            } else {
+                if (closeOnExit) {
+                    if self.lastConnectError != nil {
+                        self.onExit(Exit(err: self.lastConnectError, metadata: nil))
+                    } else {
+                        self.onExit(Exit(err: nil, metadata: nil))
+                    }
                 }
             }
         }
