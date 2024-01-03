@@ -1,10 +1,10 @@
 Pod::Spec.new do |spec|
     spec.name         = "FuseConnect"
-    spec.version      = "1.0.4"
+    spec.version      = "1.0.5"
     spec.summary      = "FuseConnect iOS SDK"
     spec.description  = <<-DESC
-    With just a few simple steps, you can use Fuse Connect SDK to display a list of institutions, 
-    handle the user's selection, and obtain an access token that can be used to authenticate requests 
+    With just a few simple steps, you can use Fuse Connect SDK to display a list of institutions,
+    handle the user's selection, and obtain an access token that can be used to authenticate requests
     to the Fuse API.
     DESC
     spec.homepage     = "https://github.com/Cluttr-eng/ios-fuse-connect"
